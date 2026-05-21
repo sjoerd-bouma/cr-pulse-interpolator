@@ -13,7 +13,7 @@ concurrency: # run only one instance of the tests per branch
 
 jobs:
   setup:
-    name: Setup environment and Linting
+    name: Run demo scripts
     runs-on: 'ubuntu-latest'
 
     steps:
@@ -37,6 +37,7 @@ jobs:
       id: cache-demo-files
       uses: actions/cache@v5
       with:
+        key: demo-files
         path: |
           demo/*.h5
 
