@@ -43,18 +43,22 @@ jobs:
 
     - name: Download demo files
       if: steps.cache-demo-files.outputs.cache-hit != 'true'
+      working-directory: ./demo
       run: |
-        ./demo/download_demo_data.sh
+        ./download_demo_data.sh
 
     - name: Fourier interpolation
+      working-directory: ./demo
       run:
-        python demo/demo_interpolation_fourier.py
+        python demo_interpolation_fourier.py
 
     - name: Signal interpolation
+      working-directory: ./demo
       run:
-        python demo/demo_signal_interpolation.py
+        python demo_signal_interpolation.py
 
     - name: Minimal usage demo
+      working-directory: ./demo
       run:
-        python demo/minimal_usage_demo.py
+        python minimal_usage_demo.py
 
