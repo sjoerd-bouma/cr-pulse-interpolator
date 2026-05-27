@@ -5,7 +5,7 @@ on:
   pull_request:
 
 env:
-  PYTHON_VERSION: '3.10'
+  PYTHON_VERSION: '3.x'
 
 concurrency: # run only one instance of the tests per branch
   group: unit-tests-${{ github.ref }}
