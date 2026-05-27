@@ -1,6 +1,10 @@
 # Build files
 /build/
+dist/
 /src/cr_pulse_interpolator.egg-info/
+
+# Python cache files
+__pycache__/
 
 # Demo files
 /demo/*.h5

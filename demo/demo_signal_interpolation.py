@@ -3,6 +3,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 # plt.ion()
 
 import cr_pulse_interpolator.signal_interpolation_fourier as sigF 
@@ -84,6 +85,10 @@ for all 250 test positions
 
 core_distances = np.zeros(nof_test_positions)
 time_mismatches = np.zeros(nof_test_positions)
+CC_values = np.zeros( (nof_test_positions, 2) )
+fluence_delta_rel = np.zeros((nof_test_positions, 2))
+fluence_delta_abs = np.zeros((nof_test_positions, 2))
+interpolation_time = 0
 
 for index in range(nof_test_positions):
     this_x, this_y = test_pos_x[index], test_pos_y[index]
@@ -92,7 +97,12 @@ for index in range(nof_test_positions):
 
     real_start_time = test_time_axis[index][0]
 
+    t0 = time.perf_counter()
     interpolated_pulse, interpolated_start_time, _, _ = signal_interpolator(this_x, this_y, full_output=True, pulse_centered=False)
+    t1 = time.perf_counter()
+    interpolation_time += t1 - t0
+    orig_pulse = test_antenna_data[index]
+
     
     timing_mismatch = interpolated_start_time - real_start_time
     timing_mismatch *= 1.0e9 # ns 
@@ -101,49 +111,46 @@ for index in range(nof_test_positions):
     core_distances[index] = core_distance
     print(f'Core distance = {core_distance:3.2f} m: Time mismatch = {timing_mismatch:3.3f} ns')
 
-    #sample_offset = int(timings / signal_interpolator.sampling_period * -1)
+    for pol in (0, 1): # also look at cross-correlation and fluence
+        (CC_zeroshift, CC_optimized_timeshift, delta_t, energy_rel_diff) = demo_helper.get_crosscorrelation(
+            orig_pulse[:, pol], interpolated_pulse[:, pol]
+        )
+        print('Normalized cross correlation (CC) = %1.4f, time mismatch = %1.3f ns' % (CC_zeroshift, delta_t))
+
+        CC_values[index, pol] = CC_zeroshift
+
+        fluence_orig = np.sum(orig_pulse**2, axis=0)
+        fluence_interp = np.sum(interpolated_pulse**2, axis=0)
+        fluence_delta_abs = fluence_interp - fluence_orig
+        fluence_delta_rel = fluence_delta_abs / fluence_orig
+
+print(80*'-'+3*'\n')
+print(f"Interpolation took {interpolation_time*1e3:.0f} ms ({interpolation_time/nof_test_positions*1e3:.2f} ms per pulse)")
+print("Summary of interpolation errors:")
+errors =  dict(
+    timing_ns=time_mismatches, cross_correlation=CC_values,
+    fluence_delta_abs=np.abs(fluence_delta_abs), fluence_delta_rel = fluence_delta_rel)
+
+for key, values in errors.items():
+    mean = ", ".join([f"{k:.2e}" for k in np.atleast_1d(np.mean(values, axis=0))])
+    max = ", ".join([f"{k:.2e}" for k in np.atleast_1d(np.max(values, axis=0))])
+    min = ", ".join([f"{k:.2e}" for k in np.atleast_1d(np.min(values, axis=0))])
+    std = ", ".join([f"{k:.2e}" for k in np.atleast_1d(np.std(values, axis=0))])
+
+    print(f"    {key:18s}: mean: {mean} max: {max} min: {min} std: {std}")
+
 
 plt.figure()
 plt.scatter(core_distances, time_mismatches)
 plt.xlabel('Core distance [ m ]')
 plt.ylabel('Start time mismatch [ ns ]')
 
-
-"""
-Evaluate cross-correlation between true and interpolated pulses
-for all 250 test positions, and for each of the 2 `on-sky' polarizations
-"""
-CC_values = np.zeros( (nof_test_positions, 2) )
-distances = np.zeros(nof_test_positions)
-for index in range(nof_test_positions):
-    this_x, this_y = test_pos_x[index], test_pos_y[index]
-    core_distance = np.sqrt(this_x**2 + this_y**2)
-    print('Interpolating pulse at position x = %3.2f, y = %3.2f m' % (this_x, this_y))
-
-    orig_pulse = test_antenna_data[index]
-
-    interpolated_pulse, timings, _, _ = signal_interpolator(this_x, this_y, full_output=True, pulse_centered=False)
-    sample_offset = 0 # int(timings / signal_interpolator.sampling_period * -1)
-
-    for pol in (0, 1):
-        this_cutoff_freq = signal_interpolator.get_cutoff_freq(this_x, this_y, pol)
-
-        #filtered_orig = demo_helper.do_filter_signal_lowpass(orig_pulse, this_cutoff_freq)
-
-        (CC_zeroshift, CC_optimized_timeshift, delta_t, energy_rel_diff) = demo_helper.get_crosscorrelation(
-            orig_pulse[:, pol], np.roll(interpolated_pulse[:, pol], sample_offset)
-        )
-        print('Normalized cross correlation (CC) = %1.4f, time mismatch = %1.3f ns' % (CC_zeroshift, delta_t))
-
-        CC_values[index, pol] = CC_zeroshift
-        distances[index] = core_distance
-
-print('\n\n')
+print('\n')
 print(f'Start time mismatches stddev (i.e. timing error) = {np.std(time_mismatches):3.4f} ns')
 
 plt.figure()
-plt.scatter(distances, CC_values[:, 0], label='pol 0')
-plt.scatter(distances, CC_values[:, 1], label='pol 1')
+plt.scatter(core_distances, CC_values[:, 0], label='pol 0')
+plt.scatter(core_distances, CC_values[:, 1], label='pol 1')
 plt.xlabel('Core distance [ m ]')
 plt.ylabel('Normalized CC')
 plt.grid()
